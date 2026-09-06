@@ -1,19 +1,37 @@
-"""Build the search index.
+"""Build the search index from the documents/ folder.
 
-Run this once (and again whenever you add or change files in documents/):
+Run once, and again whenever you add or change files:
 
     python ingest.py
 
-It reads every file, splits them into chunks, turns each chunk into a vector,
-and stores everything in the local Chroma database.
+It reads every file, splits them into overlapping chunks, embeds each chunk
+with the OpenAI API, and stores everything in the local ChromaDB database.
 """
+
+from dotenv import load_dotenv
 
 from loader import load_documents
 from chunker import chunk_documents
 from embedder import embed
 from vectorstore import reset_collection, add_chunks
 
+load_dotenv()  # read OPENAI_API_KEY etc. from a .env file if present
+
 DOCS_FOLDER = "documents"
+
+
+def build_index(folder=DOCS_FOLDER):
+    """Read, chunk, embed and store every document. Returns the chunk count."""
+    documents = load_documents(folder)
+    if not documents:
+        return 0
+
+    chunks = chunk_documents(documents)
+    embeddings = embed([c["text"] for c in chunks])
+
+    collection = reset_collection()
+    add_chunks(collection, chunks, embeddings)
+    return len(chunks)
 
 
 def main():
@@ -23,18 +41,9 @@ def main():
         print("No .txt, .md or .pdf files found. Add some to documents/ first.")
         return
     print(f"  loaded {len(documents)} document(s)")
-
-    chunks = chunk_documents(documents)
-    print(f"  split into {len(chunks)} chunk(s)")
-
-    print("Embedding chunks (first run downloads the model, please wait) ...")
-    embeddings = embed([c["text"] for c in chunks])
-
-    print("Storing in the vector database ...")
-    collection = reset_collection()
-    add_chunks(collection, chunks, embeddings)
-
-    print(f"\nDone. Indexed {len(chunks)} chunks. You can now run:  python ask.py")
+    print("Chunking, embedding and indexing (this calls the OpenAI API) ...")
+    count = build_index()
+    print(f"\nDone. Indexed {count} chunks. Now run:  uvicorn api:app --reload")
 
 
 if __name__ == "__main__":

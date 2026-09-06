@@ -1,17 +1,19 @@
-"""A thin wrapper around Chroma, a local vector database.
+"""A thin wrapper around ChromaDB, a local vector database.
 
-A vector database stores our chunks together with their embedding vectors and,
-given a new vector (the question), quickly finds the chunks whose vectors are
-closest to it. "Closest" here means "most similar in meaning".
+The vector database stores each chunk together with its embedding vector and,
+given a question vector, quickly returns the chunks whose vectors are closest
+in meaning (this is the "top-k semantic search" step of the pipeline).
 
-We keep the data on disk in a .chroma/ folder, so you only have to build the
-index once and can ask questions afterwards without re-reading every file.
+We use cosine distance, which is the standard choice for text embeddings, and
+persist everything to a .chroma/ folder so the index survives between runs.
 """
 
 import chromadb
 
 DB_PATH = ".chroma"
 COLLECTION_NAME = "documents"
+# cosine similarity is the recommended distance metric for text embeddings
+COLLECTION_META = {"hnsw:space": "cosine"}
 
 
 def _client():
@@ -24,13 +26,13 @@ def reset_collection():
     try:
         client.delete_collection(COLLECTION_NAME)
     except Exception:
-        pass  # nothing to delete the first time round
-    return client.create_collection(COLLECTION_NAME)
+        pass  # nothing to delete on the first run
+    return client.create_collection(COLLECTION_NAME, metadata=COLLECTION_META)
 
 
 def get_collection():
     """Open the existing index (creating it if it isn't there yet)."""
-    return _client().get_or_create_collection(COLLECTION_NAME)
+    return _client().get_or_create_collection(COLLECTION_NAME, metadata=COLLECTION_META)
 
 
 def add_chunks(collection, chunks, embeddings):
@@ -44,10 +46,10 @@ def add_chunks(collection, chunks, embeddings):
 
 
 def search(collection, query_embedding, k=4):
-    """Return the k chunks most similar to the question vector."""
+    """Return the top-k chunks most similar to the question vector."""
     result = collection.query(query_embeddings=[query_embedding], n_results=k)
     hits = []
-    # Chroma nests results one level deep (one list per query); we sent one query.
+    # Chroma nests results one level per query; we only sent one query.
     for text, meta, distance in zip(
         result["documents"][0],
         result["metadatas"][0],
@@ -62,7 +64,7 @@ def search(collection, query_embedding, k=4):
 
 
 if __name__ == "__main__":
-    # Tiny self-test using fake 3-number vectors (no ML model needed).
+    # Tiny self-test using fake 3-number vectors (no API call needed).
     col = reset_collection()
     demo = [
         {"text": "apples and oranges", "source": "fruit.txt", "chunk_id": "a"},

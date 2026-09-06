@@ -1,88 +1,45 @@
 # 📄 Document Q&A Assistant (RAG)
 
-Ask questions about your own documents — contracts, research papers, notes — and
-get answers grounded **only in those files**, with the source cited. Built with
-[Chroma](https://www.trychroma.com/) for vector search, a local
-[sentence-transformers](https://www.sbert.net/) embedding model, and
-[Claude](https://www.anthropic.com/) for generating the answers.
+**Python · FastAPI · ChromaDB · OpenAI API**
 
-This is a classic **RAG** (Retrieval-Augmented Generation) pipeline: instead of
-hoping a language model already knows your data, you retrieve the relevant
-passages first and hand them to the model as context.
+A Retrieval-Augmented Generation (RAG) system that answers natural-language
+questions over a document corpus and returns answers **grounded in cited source
+passages**. It implements the full pipeline — document chunking with overlap,
+embedding-based semantic search over a vector database, top-k retrieval, and
+grounded prompting to reduce hallucination — and wraps it in a REST API with a
+chat web interface for interactive querying.
 
 ---
 
 ## How it works
 
 ```
-                    ┌─────────────┐
- documents/  ─────► │  loader.py  │  read .txt / .md / .pdf
-                    └──────┬──────┘
-                           ▼
-                    ┌─────────────┐
-                    │ chunker.py  │  split into small overlapping pieces
-                    └──────┬──────┘
-                           ▼
-                    ┌─────────────┐
-                    │ embedder.py │  each chunk → a vector (list of numbers)
-                    └──────┬──────┘
-                           ▼
-                    ┌───────────────┐
-                    │ vectorstore.py│  store vectors in Chroma  ◄── ingest.py
-                    └──────┬────────┘
-                           ▼
- your question ──► embed ──► find nearest chunks ──► Claude answers ── ask.py
+                      ┌─────────────┐
+ documents/  ───────► │  loader.py  │  read .txt / .md / .pdf
+                      └──────┬──────┘
+                             ▼
+                      ┌─────────────┐
+                      │ chunker.py  │  split into overlapping chunks
+                      └──────┬──────┘
+                             ▼
+                      ┌─────────────┐
+                      │ embedder.py │  OpenAI embeddings  (one vector per chunk)
+                      └──────┬──────┘
+                             ▼
+                      ┌───────────────┐
+                      │ vectorstore.py│  store vectors in ChromaDB (cosine)
+                      └──────┬────────┘
+                             ▼
+ question ─► embed ─► top-k search ─► grounded prompt ─► OpenAI chat ─► answer + sources
+                             └──────────────── rag.py ────────────────┘
+                                         served by api.py (FastAPI)
 ```
 
-1. **Retrieval** — your question is embedded and compared against every chunk;
-   the closest few are pulled out.
-2. **Augmented** — those chunks are pasted into the prompt as context.
-3. **Generation** — Claude answers using that context and cites the source file.
-
----
-
-## Setup
-
-```bash
-# 1. Clone and enter the project
-git clone https://github.com/YOUR_USERNAME/rag-qa-assistant.git
-cd rag-qa-assistant
-
-# 2. (Recommended) create a virtual environment
-python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-
-# 3. Install dependencies
-pip install -r requirements.txt
-
-# 4. Add your Anthropic API key
-export ANTHROPIC_API_KEY="sk-ant-..."   # get one at console.anthropic.com
-```
-
-## Usage
-
-```bash
-# 1. Put your files in the documents/ folder (.txt, .md, .pdf).
-#    A sample handbook is already included so you can try it right away.
-
-# 2. Build the search index (run again whenever documents change):
-python ingest.py
-
-# 3. Ask questions:
-python ask.py
-```
-
-Example session:
-
-```
-You: How many vacation days do I get?
-Claude: Full-time employees receive 20 paid vacation days per year, accrued
-monthly, with up to 5 unused days carried into the next year.
-Sources: employee_handbook.md
-```
-
-Each file also runs on its own for learning/debugging, e.g. `python loader.py`,
-`python chunker.py`, or `python embedder.py`.
+1. **Retrieval** — the question is embedded and compared against every chunk;
+   the top-k closest chunks are returned.
+2. **Augmented** — those chunks are injected into the prompt as context.
+3. **Generation** — the model answers using **only** that context and cites the
+   source filename(s); if the answer isn't there, it says so.
 
 ---
 
@@ -90,33 +47,94 @@ Each file also runs on its own for learning/debugging, e.g. `python loader.py`,
 
 | File | Job |
 |------|-----|
-| `loader.py` | Reads `.txt`, `.md` and `.pdf` files into plain text |
-| `chunker.py` | Splits long text into small overlapping chunks |
-| `embedder.py` | Turns text into embedding vectors (`all-MiniLM-L6-v2`) |
-| `vectorstore.py` | Stores and searches chunks with Chroma |
-| `ingest.py` | One command to build the index from `documents/` |
-| `ask.py` | Interactive question-answering loop |
+| `loader.py` | Read `.txt`, `.md`, `.pdf` files into plain text |
+| `chunker.py` | Split long text into overlapping chunks |
+| `embedder.py` | Embed text with the OpenAI API |
+| `vectorstore.py` | Store & search chunks in ChromaDB (top-k, cosine) |
+| `rag.py` | Retrieve + grounded prompt + OpenAI chat completion |
+| `ingest.py` | CLI to build the index from `documents/` |
+| `api.py` | FastAPI REST API + serves the chat UI |
+| `static/index.html` | Chat web interface |
 
 ---
 
-## Customizing
+## Setup
 
-- **Chunk size / overlap** — tweak the defaults in `chunker.py`. Smaller chunks =
-  more precise retrieval; larger chunks = more context per hit.
-- **How many chunks to retrieve** — change `TOP_K` in `ask.py`.
-- **Model** — set `ANTHROPIC_MODEL` (see the current list of
-  [models](https://docs.claude.com/en/docs/about-claude/models)).
-- **Run the answer step fully local & free** — the retrieval half already runs
-  locally; you can swap the Claude call in `ask.py` for a local model served by
-  [Ollama](https://ollama.com/) if you'd rather not use an API.
+```bash
+# 1. Clone and enter the project
+git clone https://github.com/YOUR_USERNAME/document-qa-assistant.git
+cd document-qa-assistant
 
-## Notes & limits
+# 2. Create and activate a virtual environment
+python -m venv .venv
+source .venv/bin/activate           # Windows: .venv\Scripts\activate
 
-- This is a learning project, kept deliberately small and readable.
-- The embedding model (~90 MB) downloads automatically on first run.
-- Answers are only as good as your documents and the retrieved chunks; if the
-  answer isn't in your files, the assistant will say so.
+# 3. Install dependencies
+pip install -r requirements.txt
+
+# 4. Add your OpenAI API key
+cp .env.example .env                 # then edit .env and paste your key
+# or:  export OPENAI_API_KEY="sk-..."
+```
+
+## Usage
+
+```bash
+# 1. Put your files in documents/ (.txt, .md, .pdf).
+#    A sample handbook is included so you can try it immediately.
+
+# 2. Build the index (re-run whenever documents change):
+python ingest.py
+
+# 3. Start the API + web app:
+uvicorn api:app --reload
+
+# 4. Open http://127.0.0.1:8000  and start asking questions.
+```
+
+### REST API
+
+The same pipeline is available as JSON endpoints:
+
+```bash
+# Ask a question
+curl -X POST http://127.0.0.1:8000/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question": "How many vacation days do I get?"}'
+# -> {"answer": "...", "sources": ["employee_handbook.md"]}
+
+# Rebuild the index from the documents/ folder
+curl -X POST http://127.0.0.1:8000/ingest
+```
+
+Interactive API docs (auto-generated by FastAPI) live at
+`http://127.0.0.1:8000/docs`.
+
+---
+
+## Configuration
+
+Set these in `.env` or your shell:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `OPENAI_API_KEY` | — | **Required.** Your OpenAI key. |
+| `OPENAI_CHAT_MODEL` | `gpt-4o-mini` | Model that writes the answer. |
+| `OPENAI_EMBED_MODEL` | `text-embedding-3-small` | Model that creates embeddings. |
+| `TOP_K` | `4` | How many chunks to retrieve per question. |
+
+You can also tune chunk size and overlap in `chunker.py`.
+
+> **Model names change over time.** If you hit a "model not found" error, pick a
+> current model from https://platform.openai.com/docs/models and set the
+> variable above.
+
+## Notes
+
+- This is a compact, readable learning project.
+- Cost is minimal on small corpora (`gpt-4o-mini` + `text-embedding-3-small`
+  are inexpensive), but every question and ingest makes OpenAI API calls.
 
 ## License
 
-MIT — do whatever you like with it.
+MIT
