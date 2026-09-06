@@ -1,0 +1,6 @@
+# Core RAG dependencies
+sentence-transformers>=3.0.0   # turns text into embedding vectors (all-MiniLM-L6-v2)
+chromadb>=1.0.0                # local vector database for storing/searching chunks
+pypdf>=5.0.0                   # reads text out of PDF files
+anthropic>=0.40.0             # calls Claude to generate the final answer
+numpy>=1.26.0                 # used in the embedder similarity demo

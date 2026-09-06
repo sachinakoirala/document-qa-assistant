@@ -1,0 +1,18 @@
+# Secrets — never commit your API key
+.env
+
+# Local vector database (rebuilt with `python ingest.py`)
+.chroma/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Downloaded model cache
+.cache/
+
+# OS noise
+.DS_Store
