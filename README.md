@@ -135,6 +135,3 @@ You can also tune chunk size and overlap in `chunker.py`.
 - Cost is minimal on small corpora (`gpt-4o-mini` + `text-embedding-3-small`
   are inexpensive), but every question and ingest makes OpenAI API calls.
 
-## License
-
-MIT
