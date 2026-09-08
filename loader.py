@@ -35,7 +35,7 @@ def load_documents(folder):
         elif suffix == ".pdf":
             text = _read_pdf(path)
         else:
-            continue  # skip anything that isn't text we can read
+            continue  
 
         text = text.strip()
         if text:  # ignore empty / unreadable files

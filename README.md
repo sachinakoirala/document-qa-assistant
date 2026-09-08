@@ -1,140 +1,109 @@
-# 📄 Document Q&A Assistant (RAG)
+# Document Q&A Assistant
 
-**Python · FastAPI · ChromaDB · OpenAI API**
+A question-answering app that reads my own documents and answers questions about
+them in plain English, always pointing back to the file the answer came from.
+Instead of relying on what a language model already knows, it looks things up in
+the documents first and only answers from what it finds. This is a pattern
+called RAG (Retrieval-Augmented Generation).
 
-A Retrieval-Augmented Generation (RAG) system that answers natural-language
-questions over a document corpus and returns answers **grounded in cited source
-passages**. It implements the full pipeline — document chunking with overlap,
-embedding-based semantic search over a vector database, top-k retrieval, and
-grounded prompting to reduce hallucination — and wraps it in a REST API with a
-chat web interface for interactive querying.
+I built this to get hands-on with how retrieval and language models work together,
+and to have a small but complete end-to-end project: from reading raw files all
+the way to a working web app.
 
----
+## What it can do
+
+- Answer natural-language questions about a set of documents (.txt, .md, .pdf)
+- Show which source file each answer came from
+- Say "I don't know" when the answer isn't in the documents, instead of guessing
+- Add documents three ways: drop files in a folder, paste text in the browser,
+  or upload a file from the browser
+- Works both as a REST API and through a simple chat web page
 
 ## How it works
 
+The pipeline has a few steps:
+
+1. **Load** – read the text out of each file (`loader.py`).
+2. **Chunk** – split long text into smaller overlapping pieces so each piece is
+   about one idea (`chunker.py`). The overlap avoids cutting a sentence in half.
+3. **Embed** – turn each chunk into a vector (a list of numbers that represents
+   its meaning) using the OpenAI embeddings API (`embedder.py`).
+4. **Store** – save those vectors in ChromaDB, a local vector database
+   (`vectorstore.py`).
+5. **Ask** – when I ask a question, it gets embedded too, the database returns
+   the most similar chunks (top-k search), those chunks are put into the prompt
+   as context, and the model answers using only that context (`rag.py`).
+
+Putting the retrieved text into the prompt and telling the model to stick to it
+is what keeps the answers grounded and cuts down on made-up information.
+
 ```
-                      ┌─────────────┐
- documents/  ───────► │  loader.py  │  read .txt / .md / .pdf
-                      └──────┬──────┘
-                             ▼
-                      ┌─────────────┐
-                      │ chunker.py  │  split into overlapping chunks
-                      └──────┬──────┘
-                             ▼
-                      ┌─────────────┐
-                      │ embedder.py │  OpenAI embeddings  (one vector per chunk)
-                      └──────┬──────┘
-                             ▼
-                      ┌───────────────┐
-                      │ vectorstore.py│  store vectors in ChromaDB (cosine)
-                      └──────┬────────┘
-                             ▼
- question ─► embed ─► top-k search ─► grounded prompt ─► OpenAI chat ─► answer + sources
-                             └──────────────── rag.py ────────────────┘
-                                         served by api.py (FastAPI)
+files -> chunk -> embed -> ChromaDB
+                                 |
+question -> embed -> search top matches -> add to prompt -> OpenAI -> answer + source
 ```
 
-1. **Retrieval** — the question is embedded and compared against every chunk;
-   the top-k closest chunks are returned.
-2. **Augmented** — those chunks are injected into the prompt as context.
-3. **Generation** — the model answers using **only** that context and cites the
-   source filename(s); if the answer isn't there, it says so.
+## Tech used
 
----
-
-## Project structure
-
-| File | Job |
-|------|-----|
-| `loader.py` | Read `.txt`, `.md`, `.pdf` files into plain text |
-| `chunker.py` | Split long text into overlapping chunks |
-| `embedder.py` | Embed text with the OpenAI API |
-| `vectorstore.py` | Store & search chunks in ChromaDB (top-k, cosine) |
-| `rag.py` | Retrieve + grounded prompt + OpenAI chat completion |
-| `ingest.py` | CLI to build the index from `documents/` |
-| `api.py` | FastAPI REST API + serves the chat UI |
-| `static/index.html` | Chat web interface |
-
----
+- **Python**
+- **FastAPI** – the REST API and web server
+- **ChromaDB** – local vector database for semantic search
+- **OpenAI API** – embeddings and the chat model that writes the answer
 
 ## Setup
 
 ```bash
-# 1. Clone and enter the project
-git clone https://github.com/YOUR_USERNAME/document-qa-assistant.git
-cd document-qa-assistant
-
-# 2. Create and activate a virtual environment
+# 1. Create and activate a virtual environment
 python -m venv .venv
-source .venv/bin/activate           # Windows: .venv\Scripts\activate
+.venv\Scripts\activate        # Windows
+# source .venv/bin/activate   # macOS / Linux
 
-# 3. Install dependencies
+# 2. Install dependencies
 pip install -r requirements.txt
 
-# 4. Add your OpenAI API key
-cp .env.example .env                 # then edit .env and paste your key
-# or:  export OPENAI_API_KEY="sk-..."
+# 3. Add your OpenAI API key
+# copy .env.example to .env and put your key inside
 ```
 
-## Usage
+The `.env` file should contain:
+
+```
+OPENAI_API_KEY=your-key-here
+```
+
+## Running it
 
 ```bash
-# 1. Put your files in documents/ (.txt, .md, .pdf).
-#    A sample handbook is included so you can try it immediately.
-
-# 2. Build the index (re-run whenever documents change):
+# Build the index from the documents/ folder
 python ingest.py
 
-# 3. Start the API + web app:
+# Start the app
 uvicorn api:app --reload
-
-# 4. Open http://127.0.0.1:8000  and start asking questions.
 ```
 
-### REST API
+Then open http://127.0.0.1:8000 in a browser and ask questions. There's also an
+"Add a document" panel to paste text or upload a file directly in the browser.
 
-The same pipeline is available as JSON endpoints:
+## API endpoints
 
-```bash
-# Ask a question
-curl -X POST http://127.0.0.1:8000/ask \
-  -H "Content-Type: application/json" \
-  -d '{"question": "How many vacation days do I get?"}'
-# -> {"answer": "...", "sources": ["employee_handbook.md"]}
+| Method | Route        | What it does                          |
+|--------|--------------|---------------------------------------|
+| POST   | `/ask`       | Ask a question, get an answer + sources |
+| POST   | `/upload`    | Upload a PDF/TXT/MD file and index it |
+| POST   | `/add-text`  | Add pasted text to the index          |
+| POST   | `/ingest`    | Rebuild the index from the folder     |
+| POST   | `/clear`     | Remove all documents from the index   |
 
-# Rebuild the index from the documents/ folder
-curl -X POST http://127.0.0.1:8000/ingest
-```
+Interactive API docs are auto-generated at http://127.0.0.1:8000/docs.
 
-Interactive API docs (auto-generated by FastAPI) live at
-`http://127.0.0.1:8000/docs`.
+## What I learned
 
----
+<!-- Write a few honest lines here in your own words. Some ideas to start from: -->
+<!-- - how chunking and overlap affect the quality of retrieved results -->
+<!-- - why embeddings let you search by meaning instead of exact keywords -->
+<!-- - how to keep a model's answers grounded to reduce hallucination -->
+<!-- - wiring a Python pipeline behind a FastAPI web app -->
 
-## Configuration
+## Author
 
-Set these in `.env` or your shell:
-
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `OPENAI_API_KEY` | — | **Required.** Your OpenAI key. |
-| `OPENAI_CHAT_MODEL` | `gpt-4o-mini` | Model that writes the answer. |
-| `OPENAI_EMBED_MODEL` | `text-embedding-3-small` | Model that creates embeddings. |
-| `TOP_K` | `4` | How many chunks to retrieve per question. |
-
-You can also tune chunk size and overlap in `chunker.py`.
-
-> **Model names change over time.** If you hit a "model not found" error, pick a
-> current model from https://platform.openai.com/docs/models and set the
-> variable above.
-
-## Notes
-
-- This is a compact, readable learning project.
-- Cost is minimal on small corpora (`gpt-4o-mini` + `text-embedding-3-small`
-  are inexpensive), but every question and ingest makes OpenAI API calls.
-
-## License
-
-MIT
+Sachina Koirala

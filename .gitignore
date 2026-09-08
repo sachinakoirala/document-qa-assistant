@@ -1,4 +1,4 @@
-# Secrets — never commit your API key
+# Secrets 
 .env
 
 # Local vector database (rebuilt with `python ingest.py`)

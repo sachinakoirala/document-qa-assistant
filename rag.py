@@ -18,8 +18,6 @@ from openai import OpenAI
 from embedder import embed
 from vectorstore import get_collection, search
 
-# Model names change over time. If you get a "model not found" error, set a
-# current one from https://platform.openai.com/docs/models
 CHAT_MODEL = os.environ.get("OPENAI_CHAT_MODEL", "gpt-4o-mini")
 TOP_K = int(os.environ.get("TOP_K", "4"))
 
