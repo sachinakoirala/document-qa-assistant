@@ -16,3 +16,4 @@ env/
 
 # OS noise
 .DS_Store
+.env
