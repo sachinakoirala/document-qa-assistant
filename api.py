@@ -17,7 +17,9 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-
+from fastapi import FastAPI, File, UploadFile      # add File, UploadFile
+from ingest import build_index, add_text, add_file  # add add_text, add_file
+from vectorstore import reset_collection            # new line
 import rag
 from ingest import build_index
 
@@ -36,7 +38,9 @@ class AskResponse(BaseModel):
     answer: str
     sources: list[str]
 
-
+class AddTextRequest(BaseModel):
+    name: str = "pasted-text"
+    text: str
 @app.get("/health")
 def health():
     return {"status": "ok"}
@@ -60,6 +64,22 @@ def home():
     """Serve the chat web interface."""
     return FileResponse(STATIC_DIR / "index.html")
 
+@app.post("/add-text")
+def add_text_endpoint(request: AddTextRequest):
+    count = add_text(request.name, request.text)
+    return {"indexed_chunks": count, "source": (request.name or "pasted-text").strip()}
 
+
+@app.post("/upload")                                # <-- upload-only
+async def upload_file(file: UploadFile = File(...)):
+    data = await file.read()
+    count, source = add_file(file.filename, data)
+    return {"indexed_chunks": count, "source": source}
+
+
+@app.post("/clear")
+def clear_index():
+    reset_collection()
+    return {"status": "cleared"}
 # serve any other static assets (css/js) if you add them later
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

@@ -37,7 +37,7 @@ def get_collection():
 
 def add_chunks(collection, chunks, embeddings):
     """Store chunks + their vectors. `chunks` and `embeddings` line up 1:1."""
-    collection.add(
+    collection.upsert(
         ids=[c["chunk_id"] for c in chunks],
         documents=[c["text"] for c in chunks],
         embeddings=embeddings,

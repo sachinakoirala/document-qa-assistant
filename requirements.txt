@@ -8,3 +8,4 @@ chromadb>=1.0.0         # local vector database (semantic search)
 pypdf>=5.0.0            # read text out of PDF files
 python-dotenv>=1.0.0    # load OPENAI_API_KEY from a .env file
 numpy>=1.26.0           # used only in the embedder similarity demo
+python-multipart>=0.0.9

@@ -9,6 +9,18 @@ def _read_pdf(path):
     pages = [page.extract_text() or "" for page in reader.pages]
     return "\n".join(pages)
 
+def read_file(path):
+    """Read a single .txt, .md or .pdf file into plain text."""
+    from pathlib import Path
+    path = Path(path)
+    suffix = path.suffix.lower()
+    if suffix in (".txt", ".md"):
+        text = path.read_text(encoding="utf-8-sig")
+    elif suffix == ".pdf":
+        text = _read_pdf(path)
+    else:
+        return ""
+    return text.strip()
 
 def load_documents(folder):
     """Read every .txt, .md and .pdf file in a folder into a list of documents.
