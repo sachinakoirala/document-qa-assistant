@@ -94,16 +94,6 @@ Then open http://127.0.0.1:8000 in a browser and ask questions. There's also an
 | POST   | `/ingest`    | Rebuild the index from the folder     |
 | POST   | `/clear`     | Remove all documents from the index   |
 
-Interactive API docs are auto-generated at http://127.0.0.1:8000/docs.
-
-## What I learned
-
-<!-- Write a few honest lines here in your own words. Some ideas to start from: -->
-<!-- - how chunking and overlap affect the quality of retrieved results -->
-<!-- - why embeddings let you search by meaning instead of exact keywords -->
-<!-- - how to keep a model's answers grounded to reduce hallucination -->
-<!-- - wiring a Python pipeline behind a FastAPI web app -->
-
 ## Author
 
 Sachina Koirala
